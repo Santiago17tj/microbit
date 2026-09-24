@@ -296,14 +296,17 @@ def main():
                 continue
             datos = parsear_linea(linea)
             if datos is None:
-                print("   (linea ignorada: {!r})".format(linea))
+                if linea.startswith("ERROR_DS18B20"):
+                    print("   DS18B20 -> {}  (revisa cableado P0 y resistencia 4.7k)".format(linea))
+                else:
+                    print("   (linea ignorada: {!r})".format(linea))
                 continue
             temp, hum, raw = datos
             hora = datetime.datetime.now()
             n += 1
             raws.append(raw)
 
-            t_txt = "ERROR SENSOR" if temp is None else "{} °C".format(temp)
+            t_txt = "ERROR SENSOR ({})".format(linea.split(",")[0]) if temp is None else "{} °C".format(temp)
             print("{} | Temperatura: {} | Humedad: {}% | RAW: {}".format(
                 hora.strftime("%H:%M:%S"), t_txt, hum, raw))
 

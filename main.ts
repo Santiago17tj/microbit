@@ -5,6 +5,11 @@
 let tempC = 0
 let humAnalog = 0
 let humPct = 0
+// Diagnostico: si el DS18B20 falla, envia el motivo por serial
+// (Python lo muestra pero no lo guarda como dato)
+dstemp.sensorError(function (errorMessage, errorCode, port) {
+    serial.writeLine("ERROR_DS18B20:" + errorMessage + ",CODIGO:" + errorCode + ",PIN:P" + port)
+})
 basic.forever(function () {
     tempC = dstemp.celsius(DigitalPin.P0)
     humAnalog = pins.analogReadPin(AnalogPin.P1)
