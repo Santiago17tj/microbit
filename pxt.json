@@ -1,0 +1,21 @@
+{
+    "name": "compostaje-microbit",
+    "version": "1.0.0",
+    "description": "Monitor de compostaje: DS18B20 en P0 y FC-28 en P1, datos por serial a 115200",
+    "dependencies": {
+        "core": "*",
+        "dstemp": "github:bsiever/microbit-dstemp#v0.2.1"
+    },
+    "files": [
+        "README.md",
+        "main.ts"
+    ],
+    "testDependencies": {},
+    "targetVersions": {
+        "targetId": "microbit"
+    },
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "tsprj"
+}

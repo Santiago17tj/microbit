@@ -1,0 +1,25 @@
+name: Compilar .hex de la micro:bit
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Compilar con MakeCode
+        run: npx --yes makecode build
+      - name: Copiar .hex con nombre claro
+        run: |
+          ls -la built || true
+          cp built/binary.hex compostaje-microbit.hex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compostaje-microbit-hex
+          path: compostaje-microbit.hex

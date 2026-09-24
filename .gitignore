@@ -1,0 +1,7 @@
+built/
+node_modules/
+pxt_modules/
+.pxt/
+__pycache__/
+*.pyc
+datos_compost/
