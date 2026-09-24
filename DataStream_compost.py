@@ -247,7 +247,14 @@ def main():
 
         def lineas_serial():
             nonlocal microbit
+            ultimo_dato = time.time()
+            avisado = False
             while True:
+                if not avisado and time.time() - ultimo_dato > 40:
+                    avisado = True
+                    print("AVISO: 40 s sin recibir nada de la micro:bit. Si su pantalla no muestra")
+                    print("       'T:', 'MESOFILA'..., carga compostaje-microbit.hex en la unidad MICROBIT")
+                    print("       (este programa sigue esperando y se reconecta solo).")
                 try:
                     dato = microbit.readline()
                 except serial.SerialException:
@@ -263,6 +270,7 @@ def main():
                             pass
                     continue
                 if dato:
+                    ultimo_dato, avisado = time.time(), False
                     yield dato.decode("utf-8", errors="ignore")
         lineas = lineas_serial()
 
