@@ -40,6 +40,7 @@ Los datos se guardan en `datos_compost/compost_FECHA.xlsx` (cada 10 filas y al p
 
 ## Problemas típicos
 
+- **`2_INICIAR_COMPOST.bat` no hace nada**: casi siempre es que `python` es el acceso directo de Microsoft Store (no hace nada y no da error). Los `.bat` ahora prueban `python` y `py -3`, y si no hay ninguno lo dicen. Instala Python de python.org marcando *Add python.exe to PATH*, o desactiva `python.exe` en *Configuración → Aplicaciones → Alias de ejecución de aplicaciones*. Si ves `... esperando la primera linea de la micro:bit`, Python funciona y el problema es la micro:bit (carga el `.hex`).
 - **MakeCode: "No se pudo conectar / está siendo utilizado por otra aplicación"**: cierra el Python, Tera Term, el monitor serie u otras pestañas de MakeCode. Solo un programa puede usar la micro:bit a la vez. O usa *Descargar como archivo*.
 - **"No se pudo abrir COMx"**: MakeCode (WebUSB) u otro programa tiene el puerto abierto.
 - **Temperatura = ERROR SENSOR** (la micro:bit envía `-Infinity`): revisa el DS18B20. Rojo → 3V, negro → GND, amarillo → P0, **resistencia de 4.7 kΩ entre amarillo y 3V**.

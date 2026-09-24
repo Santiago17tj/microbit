@@ -25,10 +25,16 @@ import os
 import random
 import re
 import sys
+import threading
 import time
 
-import serial
-import serial.tools.list_ports
+print("Monitor de compostaje: iniciando...", flush=True)
+try:
+    import serial
+    import serial.tools.list_ports
+except ImportError:
+    print("Falta la libreria pyserial. Ejecuta 1_VERIFICAR.bat (o: python -m pip install pyserial).")
+    sys.exit(1)
 
 # --------------------------------------------------------------------------
 # CONFIGURACION
@@ -73,6 +79,7 @@ def es_microbit(p):
 
 
 def detectar_puerto():
+    print("Buscando la micro:bit en los puertos USB...")
     puertos = list(serial.tools.list_ports.comports())
     candidatos = [p for p in puertos if es_microbit(p)]
     if candidatos:
@@ -90,7 +97,9 @@ def detectar_puerto():
 
 
 def abrir_serial(puerto):
-    return serial.Serial(puerto, BAUDIOS, timeout=1)
+    s = serial.Serial(puerto, BAUDIOS, timeout=1)
+    s.reset_input_buffer()
+    return s
 
 
 def a_numero(texto):
@@ -133,7 +142,8 @@ class HojaExcel:
     def __init__(self, ruta_xlsx):
         import win32com.client
         self.ruta = os.path.abspath(ruta_xlsx)
-        self.excel = win32com.client.Dispatch("Excel.Application")
+        # DispatchEx abre un Excel nuevo en vez de engancharse a uno oculto o bloqueado
+        self.excel = win32com.client.DispatchEx("Excel.Application")
         self.excel.Visible = True
         self.libro = self.excel.Workbooks.Add()
         self.hoja = self.libro.Worksheets(1)
@@ -158,14 +168,18 @@ class HojaExcel:
 
         rango = self.hoja.Range("A1:D{}".format(f))
         if self.tabla is None:
-            self.tabla = self.hoja.ListObjects.Add(XL_SRC_RANGE, rango, None, XL_YES)
+            self.tabla = self.hoja.ListObjects.Add(SourceType=XL_SRC_RANGE, Source=rango,
+                                                   XlListObjectHasHeaders=XL_YES)
             self.tabla.Name = "TablaCompost"
             self.tabla.TableStyle = "TableStyleMedium2"
             self._crear_grafica()
         else:
             self.tabla.Resize(rango)
         self._actualizar_grafica()
-        self.hoja.Cells(f, 1).Select()   # mantiene visible la ultima fila
+        try:
+            self.excel.ActiveWindow.ScrollRow = max(1, f - 20)   # mantiene visible la ultima fila
+        except Exception:
+            pass   # el usuario esta usando otra ventana de Excel; no pasa nada
 
     def _crear_grafica(self):
         obj = self.hoja.ChartObjects().Add(self.hoja.Range("F2").Left, self.hoja.Range("F2").Top, 620, 340)
@@ -247,14 +261,20 @@ def main():
 
         def lineas_serial():
             nonlocal microbit
-            ultimo_dato = time.time()
+            ultimo_dato = ultimo_latido = time.time()
             avisado = False
+            primer_dato = True
             while True:
-                if not avisado and time.time() - ultimo_dato > 40:
+                ahora = time.time()
+                if primer_dato and ahora - ultimo_latido >= 10:
+                    ultimo_latido = ahora
+                    print("   ... esperando la primera linea de la micro:bit ({} s)".format(int(ahora - ultimo_dato)))
+                if not avisado and ahora - ultimo_dato > 40:
                     avisado = True
                     print("AVISO: 40 s sin recibir nada de la micro:bit. Si su pantalla no muestra")
-                    print("       'T:', 'MESOFILA'..., carga compostaje-microbit.hex en la unidad MICROBIT")
-                    print("       (este programa sigue esperando y se reconecta solo).")
+                    print("       'T:', 'MESOFILA'..., carga compostaje-microbit.hex (o")
+                    print("       PROVISIONAL-temp-interna.hex) en la unidad MICROBIT.")
+                    print("       Este programa sigue esperando y se reconecta solo.")
                 try:
                     dato = microbit.readline()
                 except serial.SerialException:
@@ -270,6 +290,9 @@ def main():
                             pass
                     continue
                 if dato:
+                    if primer_dato:
+                        primer_dato = False
+                        print("Conexion OK: llegan datos de la micro:bit.")
                     ultimo_dato, avisado = time.time(), False
                     yield dato.decode("utf-8", errors="ignore")
         lineas = lineas_serial()
@@ -277,11 +300,19 @@ def main():
     # ---- Excel ----
     excel = None
     if not args.sin_excel:
+        print("Abriendo Excel (puede tardar unos segundos)...")
+        aviso_lento = threading.Timer(20, lambda: print(
+            "   Excel esta tardando. Si no se abre: cierra todos los Excel (tambien en el\n"
+            "   Administrador de tareas, EXCEL.EXE) o ejecuta con --sin-excel."))
+        aviso_lento.daemon = True
+        aviso_lento.start()
         try:
             excel = HojaExcel(ruta_xlsx)
             print("Excel abierto. Hoja 'Compostaje' creada.")
         except Exception as e:
             print("No se pudo abrir Excel ({}). Se continua guardando en CSV.".format(e))
+        finally:
+            aviso_lento.cancel()
 
     archivo_csv = open(ruta_csv, "w", newline="", encoding="utf-8-sig")
     escritor = csv.writer(archivo_csv, delimiter=";")
