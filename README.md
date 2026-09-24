@@ -16,6 +16,10 @@ La micro:bit envía cada ~15-20 s una línea: `TEMP:33,HUM:58,RAW:430`
 | `verificar_instalacion.py` / `1_VERIFICAR.bat` | Instala pyserial/pywin32, respalda el archivo del profesor, detecta el COM, prueba serial y Excel |
 | `2_INICIAR_COMPOST.bat` | Lanza `DataStream_compost.py` con doble clic |
 | `cargar_hex.py` | Copia el `.hex` a la unidad MICROBIT y comprueba que no haya `FAIL.TXT` |
+| `diagnostico_ds18b20/` → `diagnostico-ds18b20.hex` | Busca el DS18B20 en todos los pines. Pantalla: `P0 24` si responde, ❌ si no |
+| `provisional_temp_interna/` → `PROVISIONAL-temp-interna.hex` | **Provisional:** usa el sensor interno de la micro:bit (mide el chip, no el compost) mientras se cambia el DS18B20 |
+
+Los tres `.hex` se compilan solos en GitHub Actions (artefacto `compostaje-microbit-hex`).
 
 El archivo del profesor **no se modifica**. `verificar_instalacion.py` guarda una copia en `respaldo/`.
 
