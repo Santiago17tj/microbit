@@ -141,10 +141,12 @@ def main():
     if os.name == "nt":
         try:
             import win32com.client
-            xl = win32com.client.Dispatch("Excel.Application")
+            xl = win32com.client.DispatchEx("Excel.Application")
             libro = xl.Workbooks.Add()
             libro.Close(False)
-            marcar(True, "Excel se puede abrir desde Python", "version " + str(xl.Version))
+            version = str(xl.Version)
+            xl.Quit()   # no dejar un Excel invisible abierto en segundo plano
+            marcar(True, "Excel se puede abrir desde Python", "version " + version)
         except Exception as e:
             marcar(False, "Excel se puede abrir desde Python", str(e))
     resumen()
