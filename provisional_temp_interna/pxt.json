@@ -1,0 +1,19 @@
+{
+    "name": "compostaje-provisional-temp-interna",
+    "version": "1.0.0",
+    "description": "PROVISIONAL: temperatura interna de la micro:bit + FC-28 en P1",
+    "dependencies": {
+        "core": "*"
+    },
+    "files": [
+        "main.ts"
+    ],
+    "testDependencies": {},
+    "targetVersions": {
+        "targetId": "microbit"
+    },
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "tsprj"
+}
