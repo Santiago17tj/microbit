@@ -1,0 +1,20 @@
+{
+    "name": "diagnostico-ds18b20",
+    "version": "1.0.0",
+    "description": "Busca el DS18B20 en todos los pines",
+    "dependencies": {
+        "core": "*",
+        "dstemp": "github:bsiever/microbit-dstemp#v0.2.1"
+    },
+    "files": [
+        "main.ts"
+    ],
+    "testDependencies": {},
+    "targetVersions": {
+        "targetId": "microbit"
+    },
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "tsprj"
+}

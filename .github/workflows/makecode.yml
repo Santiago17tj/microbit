@@ -19,7 +19,12 @@ jobs:
         run: |
           ls -la built || true
           cp built/binary.hex compostaje-microbit.hex
+      - name: Compilar diagnostico DS18B20
+        working-directory: diagnostico_ds18b20
+        run: npx --yes makecode build && cp built/binary.hex ../diagnostico-ds18b20.hex
       - uses: actions/upload-artifact@v4
         with:
           name: compostaje-microbit-hex
-          path: compostaje-microbit.hex
+          path: |
+            compostaje-microbit.hex
+            diagnostico-ds18b20.hex
