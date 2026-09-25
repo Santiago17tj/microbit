@@ -18,7 +18,7 @@ import sys
 import time
 
 BAUDIOS = 115200
-ESPERA_DATOS = 45          # segundos: un ciclo de la micro:bit dura ~15-20 s
+ESPERA_DATOS = 45          # segundos: la micro:bit envia cada 10 s (los programas antiguos, cada ~35 s)
 ARCHIVO_PROFESOR = "DataStream_V2_var2.py"
 AQUI = os.path.dirname(os.path.abspath(__file__))
 

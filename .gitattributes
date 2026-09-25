@@ -1,0 +1,2 @@
+# Los .hex se copian tal cual a la micro:bit: que git no toque sus finales de linea
+*.hex binary
