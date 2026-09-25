@@ -138,50 +138,96 @@ def generador_simulado():
 # --------------------------------------------------------------------------
 # EXCEL
 # --------------------------------------------------------------------------
+# Excel rechaza las ordenes mientras esta ocupado (una celda en edicion, un aviso
+# abierto, la ventana de activacion...).  Esos errores se reintentan.
+EXCEL_OCUPADO = (-2147418111, -2147417846)   # RPC_E_CALL_REJECTED, RPC_E_SERVERCALL_RETRYLATER
+
+
+def excel_ocupado(e):
+    codigo = getattr(e, "hresult", None)
+    if codigo is None and getattr(e, "args", None):
+        codigo = e.args[0]
+    return codigo in EXCEL_OCUPADO
+
+
+def con_reintentos(funcion, segundos=10):
+    """Llama a funcion(); si Excel esta ocupado lo reintenta durante unos segundos."""
+    fin = time.time() + segundos
+    while True:
+        try:
+            return funcion()
+        except Exception as e:
+            if not excel_ocupado(e) or time.time() > fin:
+                raise
+            time.sleep(0.3)
+
+
 class HojaExcel:
     def __init__(self, ruta_xlsx):
         import win32com.client
         self.ruta = os.path.abspath(ruta_xlsx)
         # DispatchEx abre un Excel nuevo en vez de engancharse a uno oculto o bloqueado
         self.excel = win32com.client.DispatchEx("Excel.Application")
+        self.fila = 1            # ultima fila ya escrita en Excel
+        self.pendientes = []     # lecturas que Excel aun no ha aceptado
+        self.tabla = None
+        self.grafica = None
+        self.ejes_listos = False
+        con_reintentos(self._preparar)
+
+    def _preparar(self):
         self.excel.Visible = True
-        self.libro = self.excel.Workbooks.Add()
+        if not hasattr(self, "libro"):
+            self.libro = self.excel.Workbooks.Add()
         self.hoja = self.libro.Worksheets(1)
         self.hoja.Name = "Compostaje"
-        for col, texto in enumerate(ENCABEZADOS, start=1):
-            self.hoja.Cells(1, col).Value = texto
+        self.hoja.Range("A1:D1").Value = tuple(ENCABEZADOS)
         self.hoja.Range("A1:D1").Font.Bold = True
         self.hoja.Columns("A").NumberFormat = "hh:mm:ss"
         self.hoja.Columns("A:D").ColumnWidth = 18
-        self.fila = 1
-        self.tabla = None
-        self.grafica = None
 
     def agregar(self, hora, temp, hum, raw):
-        self.fila += 1
-        f = self.fila
+        """Anade una lectura.  Si Excel sigue ocupado tras reintentar, lanza la
+        excepcion pero la lectura queda pendiente y se escribe con la siguiente."""
         segundos = hora.hour * 3600 + hora.minute * 60 + hora.second
-        self.hoja.Cells(f, 1).Value = segundos / 86400.0      # hora como valor de Excel
-        self.hoja.Cells(f, 2).Value = "" if temp is None else temp
-        self.hoja.Cells(f, 3).Value = "" if hum is None else hum
-        self.hoja.Cells(f, 4).Value = raw
+        self.pendientes.append((segundos / 86400.0,      # hora como valor de Excel
+                                "" if temp is None else temp,
+                                "" if hum is None else hum,
+                                raw))
+        con_reintentos(self.volcar)
 
-        rango = self.hoja.Range("A1:D{}".format(f))
+    def volcar(self):
+        """Escribe las lecturas pendientes y actualiza tabla y grafica."""
+        if self.pendientes:
+            desde, hasta = self.fila + 1, self.fila + len(self.pendientes)
+            # una sola orden para todas las filas: o entran todas o ninguna
+            self.hoja.Range("A{}:D{}".format(desde, hasta)).Value = tuple(self.pendientes)
+            self.fila, self.pendientes = hasta, []
+        if self.fila < 2:
+            return
+
+        rango = self.hoja.Range("A1:D{}".format(self.fila))
         if self.tabla is None:
-            self.tabla = self.hoja.ListObjects.Add(SourceType=XL_SRC_RANGE, Source=rango,
-                                                   XlListObjectHasHeaders=XL_YES)
+            if self.hoja.ListObjects.Count > 0:      # creada en un intento anterior
+                self.tabla = self.hoja.ListObjects(1)
+            else:
+                self.tabla = self.hoja.ListObjects.Add(SourceType=XL_SRC_RANGE, Source=rango,
+                                                       XlListObjectHasHeaders=XL_YES)
             self.tabla.Name = "TablaCompost"
             self.tabla.TableStyle = "TableStyleMedium2"
-            self._crear_grafica()
         else:
             self.tabla.Resize(rango)
+        if self.grafica is None:
+            self._crear_grafica()
         self._actualizar_grafica()
         try:
-            self.excel.ActiveWindow.ScrollRow = max(1, f - 20)   # mantiene visible la ultima fila
+            self.excel.ActiveWindow.ScrollRow = max(1, self.fila - 20)   # mantiene visible la ultima fila
         except Exception:
             pass   # el usuario esta usando otra ventana de Excel; no pasa nada
 
     def _crear_grafica(self):
+        while self.hoja.ChartObjects().Count > 0:   # restos de un intento anterior
+            self.hoja.ChartObjects(1).Delete()
         obj = self.hoja.ChartObjects().Add(self.hoja.Range("F2").Left, self.hoja.Range("F2").Top, 620, 340)
         g = obj.Chart
         g.ChartType = XL_LINE_MARKERS
@@ -196,8 +242,8 @@ class HojaExcel:
         g.ChartTitle.Text = "Compostaje: temperatura y humedad en tiempo real"
         g.HasLegend = True
         g.Legend.Position = XL_LEGEND_BOTTOM
-        self.grafica = g
         self.s_temp, self.s_hum = s_temp, s_hum
+        self.grafica = g
 
     def _actualizar_grafica(self):
         f = self.fila
@@ -206,7 +252,7 @@ class HojaExcel:
         self.s_temp.Values = self.hoja.Range("B2:B{}".format(f))
         self.s_hum.XValues = horas
         self.s_hum.Values = self.hoja.Range("C2:C{}".format(f))
-        if f == 2:   # los ejes existen cuando ya hay datos
+        if not self.ejes_listos:   # los ejes existen cuando ya hay datos
             g = self.grafica
             ejes = ((XL_CATEGORY, XL_PRIMARY, "Hora"),
                     (XL_VALUE, XL_PRIMARY, "Temperatura (°C)"),
@@ -217,13 +263,16 @@ class HojaExcel:
                 eje.AxisTitle.Text = titulo
             g.Axes(XL_VALUE, XL_SECONDARY).MinimumScale = 0
             g.Axes(XL_VALUE, XL_SECONDARY).MaximumScale = 100
+            self.ejes_listos = True
 
     def guardar(self):
-        self.excel.DisplayAlerts = False
-        try:
-            self.libro.SaveAs(self.ruta, XL_OPEN_XML_WORKBOOK)
-        finally:
-            self.excel.DisplayAlerts = True
+        def _guardar():
+            self.excel.DisplayAlerts = False
+            try:
+                self.libro.SaveAs(self.ruta, XL_OPEN_XML_WORKBOOK)
+            finally:
+                self.excel.DisplayAlerts = True
+        con_reintentos(_guardar)
 
 
 # --------------------------------------------------------------------------
@@ -320,6 +369,7 @@ def main():
 
     print("Esperando datos (la micro:bit envia una linea cada ~15-20 s)... Ctrl+C para terminar.\n")
     raws, n = [], 0
+    fallos_excel = 0
     try:
         for linea in lineas:
             linea = linea.strip()
@@ -347,11 +397,21 @@ def main():
             if excel is not None:
                 try:
                     excel.agregar(hora, temp, hum, raw)
+                    fallos_excel = 0
                     if n % GUARDAR_CADA == 0:
                         excel.guardar()
                 except Exception as e:
-                    print("Error escribiendo en Excel ({}). Se sigue guardando en CSV.".format(e))
-                    excel = None
+                    if excel_ocupado(e):
+                        print("   Excel esta ocupado (una celda en edicion o un aviso abierto?).")
+                        print("   Pulsa Esc o cierra el aviso en Excel; las filas pendientes ({}) se".format(
+                            len(excel.pendientes)))
+                        print("   escribiran con la proxima lectura. El CSV ya las tiene guardadas.")
+                    else:
+                        fallos_excel += 1
+                        print("Error escribiendo en Excel ({}).".format(e))
+                        if fallos_excel >= 3:
+                            print("Excel no responde (se cerro?). Se sigue guardando solo en CSV.")
+                            excel = None
 
             if args.max_lecturas and n >= args.max_lecturas:
                 break
@@ -363,6 +423,7 @@ def main():
             microbit.close()
         if excel is not None:
             try:
+                con_reintentos(excel.volcar)
                 excel.guardar()
                 print("Excel guardado en: {}".format(excel.ruta))
             except Exception as e:
